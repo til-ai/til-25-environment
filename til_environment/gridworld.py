@@ -177,7 +177,8 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                 "direction": Discrete(len(Direction)),
                 "scout": Discrete(2),
                 "location": Box(0, self.size, shape=(2,), dtype=np.uint8),
-                "step": Discrete(NUM_ITERS),
+                # "step": Discrete(NUM_ITERS),
+                "step": Box(0, NUM_ITERS, shape=(1,), dtype=np.uint8),
             }
         )
 
