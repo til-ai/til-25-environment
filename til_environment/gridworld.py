@@ -698,12 +698,15 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                             RewardNames.SCOUT_RECON, 0
                         )
                         self._state[x, y] -= Tile.RECON.value - Tile.EMPTY.value
+                        self.add_mission = False
                     case Tile.MISSION:
                         self.rewards[self.scout] += self.rewards_dict.get(
                             RewardNames.SCOUT_MISSION, 0
                         )
                         self._state[x, y] -= Tile.MISSION.value - Tile.EMPTY.value
                         self.add_mission = True
+                    case _:
+                        self.add_mission = False
             return collision
         if _action in (Action.LEFT, Action.RIGHT):
             # update direction of agent, right = +1 and left = -1 (which is equivalent to +3), mod 4.
