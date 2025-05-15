@@ -589,6 +589,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.actions: dict[AgentID, Action] = {}
         self.observations = {agent: self.observe(agent) for agent in self.agents}
         self.num_moves = 0
+        self.add_mission = False
 
         if self.render_mode in self.metadata["render_modes"]:
             self.render()
@@ -701,6 +702,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                             RewardNames.SCOUT_MISSION, 0
                         )
                         self._state[x, y] -= Tile.MISSION.value - Tile.EMPTY.value
+                        self.add_mission = True
             return collision
         if _action in (Action.LEFT, Action.RIGHT):
             # update direction of agent, right = +1 and left = -1 (which is equivalent to +3), mod 4.
@@ -755,6 +757,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                 self.agent_locations[agent],
                 self.agent_locations[self.scout],
             ),
+            "add_mission": self.add_mission,
         }
 
     def step(self, action: ActionType):
