@@ -16,6 +16,7 @@ from pettingzoo.utils.conversions import parallel_wrapper_fn
 from pettingzoo.utils.env import ActionType, AgentID, ObsType
 from pettingzoo.utils.wrappers.base import BaseWrapper
 from supersuit import frame_stack_v2
+
 from til_environment.flatten_dict import FlattenDictWrapper
 from til_environment.helpers import (
     convert_tile_to_edge,
@@ -546,9 +547,13 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
     # reset state to pregenerated arena
     def _reset_state(self):
         self._state = self._arena.copy()
-        _dirs: dict[AgentID, np.int64] = {self.scout: self.starting_directions[0]}
-        _locs: dict[AgentID, np.ndarray] = {self.scout: self.starting_locations[0]}
-        for i, agent in enumerate([a for a in self.agents if a != self.scout], 1):
+        scout_idx = self.agents.index(self.scout)
+        _dirs: dict[AgentID, np.int64] = {}
+        _locs: dict[AgentID, np.ndarray] = {}
+        for i, agent_idx in enumerate(
+            [agent_idx for agent_idx in range(scout_idx, scout_idx + 4)]
+        ):
+            agent = self.agents[agent_idx]
             _dirs[agent] = self.starting_directions[i]
             _locs[agent] = self.starting_locations[i]
         self.agent_directions = _dirs
