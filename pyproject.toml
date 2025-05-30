@@ -6,7 +6,10 @@ build-backend = "setuptools.build_meta"
 name = "til_environment"
 description = "RL environment for TIL-AI 2025."
 version = "1.0.0"
-dynamic = ["dependencies"]
-
-[tool.setuptools.dynamic]
-dependencies = {file = ["requirements.txt"]}
+dependencies = [
+    "gymnasium==1.1.1",
+    "pygame>=2.1.3",
+    "pettingzoo==1.25.0",
+    "mazelib==0.9.16",
+    "supersuit==3.9.3",
+]
