@@ -1,5 +1,6 @@
 import functools
 import logging
+import signal
 import warnings
 from functools import partial
 
@@ -489,14 +490,37 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
             rooms.append(self._random_room())
         return DungeonRooms(self.size, self.size, rooms=rooms)
 
+    def generate_maze_with_timeout(self, timeout_seconds=1, max_retries=3):
+        def timeout_handler(signum, frame):
+            raise Exception("Maze generation timed out")
+
+        for attempt in range(max_retries):
+            try:
+                # Set up the timeout
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(timeout_seconds)
+
+                # Maze generation code
+                self._maze.generator = self._new_maze_generator()
+                self._maze.generate()
+
+                # If we get here, it worked
+                signal.alarm(0)  # Cancel the alarm
+                return
+            except Exception as e:
+                signal.alarm(0)  # Cancel the alarm
+                print(f"error during maze generation: {e}")
+                continue
+
+        raise Exception(f"Failed to generate maze after {max_retries} attempts")
+
     # randomly generate new arena
-    def _generate_arena(self):
+    def generate_arena(self):
         self.logger.debug("generating new arena...")
         # generate the same arena every time for novice
         if self.novice:
             self._init_random(19)
-        self._maze.generator = self._new_maze_generator()
-        self._maze.generate()
+        self.generate_maze_with_timeout()
         # randomly knock down some walls to open up new pathways
         # get all indices of the walls, excluding exterior walls
         _grid = self._maze.grid.copy()
@@ -582,7 +606,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.scout: AgentID = self._scout_selector.next()
         # generate arena for each match for advanced track
         if self._arena is None or (self._scout_selector.is_first() and not self.novice):
-            self._generate_arena()
+            self.generate_arena()
 
         self._reset_state()
         self.rewards = {agent: 0 for agent in self.agents}
