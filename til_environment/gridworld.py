@@ -1,5 +1,6 @@
 import functools
 import logging
+import signal
 import warnings
 from functools import partial
 
@@ -112,7 +113,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.viewcone: tuple[int, int, int, int] = (2, 2, 2, 4)
         self._arena = None
         self.logger = logging.getLogger(__name__)
-        self.num_moves = 0
+        self.num_moves = np.uint8(0)
 
         if self.debug:
             self.logger.setLevel(logging.DEBUG)
@@ -177,7 +178,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                 "direction": Discrete(len(Direction)),
                 "scout": Discrete(2),
                 "location": Box(0, self.size, shape=(2,), dtype=np.uint8),
-                "step": Discrete(NUM_ITERS),
+                "step": Discrete(NUM_ITERS + 1),
             }
         )
 
@@ -489,14 +490,37 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
             rooms.append(self._random_room())
         return DungeonRooms(self.size, self.size, rooms=rooms)
 
+    def generate_maze_with_timeout(self, timeout_seconds=1, max_retries=3):
+        def timeout_handler(signum, frame):
+            raise Exception("Maze generation timed out")
+
+        for attempt in range(max_retries):
+            try:
+                # Set up the timeout
+                signal.signal(signal.SIGALRM, timeout_handler)
+                signal.alarm(timeout_seconds)
+
+                # Maze generation code
+                self._maze.generator = self._new_maze_generator()
+                self._maze.generate()
+
+                # If we get here, it worked
+                signal.alarm(0)  # Cancel the alarm
+                return
+            except Exception as e:
+                signal.alarm(0)  # Cancel the alarm
+                print(f"error during maze generation: {e}")
+                continue
+
+        raise Exception(f"Failed to generate maze after {max_retries} attempts")
+
     # randomly generate new arena
-    def _generate_arena(self):
+    def generate_arena(self):
         self.logger.debug("generating new arena...")
         # generate the same arena every time for novice
         if self.novice:
             self._init_random(19)
-        self._maze.generator = self._new_maze_generator()
-        self._maze.generate()
+        self.generate_maze_with_timeout()
         # randomly knock down some walls to open up new pathways
         # get all indices of the walls, excluding exterior walls
         _grid = self._maze.grid.copy()
@@ -545,9 +569,13 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
     # reset state to pregenerated arena
     def _reset_state(self):
         self._state = self._arena.copy()
-        _dirs: dict[AgentID, np.int64] = {self.scout: self.starting_directions[0]}
-        _locs: dict[AgentID, np.ndarray] = {self.scout: self.starting_locations[0]}
-        for i, agent in enumerate([a for a in self.agents if a != self.scout], 1):
+        scout_idx = self.agents.index(self.scout)
+        _dirs: dict[AgentID, np.int64] = {}
+        _locs: dict[AgentID, np.ndarray] = {}
+        for i, agent_idx in enumerate(
+            [agent_idx % 4 for agent_idx in range(scout_idx, scout_idx + 4)]
+        ):
+            agent = self.agents[agent_idx]
             _dirs[agent] = self.starting_directions[i]
             _locs[agent] = self.starting_locations[i]
         self.agent_directions = _dirs
@@ -578,7 +606,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.scout: AgentID = self._scout_selector.next()
         # generate arena for each match for advanced track
         if self._arena is None or (self._scout_selector.is_first() and not self.novice):
-            self._generate_arena()
+            self.generate_arena()
 
         self._reset_state()
         self.rewards = {agent: 0 for agent in self.agents}
@@ -588,7 +616,8 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.infos = {agent: {} for agent in self.agents}
         self.actions: dict[AgentID, Action] = {}
         self.observations = {agent: self.observe(agent) for agent in self.agents}
-        self.num_moves = 0
+        self.num_moves = np.uint8(0)
+        self.add_mission = False
 
         if self.render_mode in self.metadata["render_modes"]:
             self.render()
@@ -696,11 +725,15 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                             RewardNames.SCOUT_RECON, 0
                         )
                         self._state[x, y] -= Tile.RECON.value - Tile.EMPTY.value
+                        self.add_mission = False
                     case Tile.MISSION:
                         self.rewards[self.scout] += self.rewards_dict.get(
                             RewardNames.SCOUT_MISSION, 0
                         )
                         self._state[x, y] -= Tile.MISSION.value - Tile.EMPTY.value
+                        self.add_mission = True
+                    case _:
+                        self.add_mission = False
             return collision
         if _action in (Action.LEFT, Action.RIGHT):
             # update direction of agent, right = +1 and left = -1 (which is equivalent to +3), mod 4.
@@ -755,6 +788,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                 self.agent_locations[agent],
                 self.agent_locations[self.scout],
             ),
+            "add_mission": self.add_mission,
         }
 
     def step(self, action: ActionType):
