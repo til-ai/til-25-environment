@@ -112,7 +112,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.viewcone: tuple[int, int, int, int] = (2, 2, 2, 4)
         self._arena = None
         self.logger = logging.getLogger(__name__)
-        self.num_moves = 0
+        self.num_moves = np.uint8(0)
 
         if self.debug:
             self.logger.setLevel(logging.DEBUG)
@@ -177,8 +177,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
                 "direction": Discrete(len(Direction)),
                 "scout": Discrete(2),
                 "location": Box(0, self.size, shape=(2,), dtype=np.uint8),
-                # "step": Discrete(NUM_ITERS),
-                "step": Box(0, NUM_ITERS, shape=(1,), dtype=np.uint8),
+                "step": Discrete(NUM_ITERS + 1),
             }
         )
 
@@ -593,7 +592,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
         self.infos = {agent: {} for agent in self.agents}
         self.actions: dict[AgentID, Action] = {}
         self.observations = {agent: self.observe(agent) for agent in self.agents}
-        self.num_moves = 0
+        self.num_moves = np.uint8(0)
         self.add_mission = False
 
         if self.render_mode in self.metadata["render_modes"]:
