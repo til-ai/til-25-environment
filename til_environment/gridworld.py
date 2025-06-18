@@ -740,6 +740,7 @@ class raw_env(AECEnv[AgentID, ObsType, ActionType]):
             self.agent_directions[agent] = (
                 self.agent_directions[agent] + (3 if _action is Action.LEFT else 1)
             ) % 4
+            self.add_mission = False
         if _action is (Action.STAY):
             # apply stationary penalty
             self.rewards[agent] += self.rewards_dict.get(
